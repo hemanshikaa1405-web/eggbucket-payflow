@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
+const { Pool } = require('pg');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const Joi = require('joi');
@@ -9,6 +10,12 @@ require('dotenv').config();
 
 const prisma = new PrismaClient();
 const app = express();
+app.use(cors());
+app.use(express.json());
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@db.uvhwmgyokkjcuujjesid.supabase.co:5432/postgres',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 // Trust first proxy (e.g. when running behind a tunneling service) to allow express-rate-limit
 // to safely read x-forwarded-for header without throwing errors. Adjust as needed for production.
 app.set('trust proxy', 1);

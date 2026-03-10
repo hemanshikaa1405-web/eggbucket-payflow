@@ -7,15 +7,15 @@
     if (PUBLIC.includes(p)) return;
 
     // Validate token
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
     if (!token) {
         const redirect = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `login.html?redirect=${redirect}`;
         return;
     }
 
-    // Get user data from localStorage
-    const userData = JSON.parse(localStorage.getItem('sc_user') || '{}');
+    // Get user data from sessionStorage
+    const userData = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
     if (userData && userData.username) {
         handleLoggedIn(userData);
     } else {
@@ -26,7 +26,7 @@
     // shared handler inserts logout/dashboard buttons etc
     function handleLoggedIn(userData) {
         // store user info for other pages if not already set
-        try { localStorage.setItem('sc_user', JSON.stringify(userData)); } catch (e) {}
+        try { sessionStorage.setItem('sc_user', JSON.stringify(userData)); } catch (e) { }
         try {
             const header = document.querySelector('.header');
             if (header && !document.getElementById('sc-auth-actions')) {
@@ -47,8 +47,8 @@
                         <span style="margin-left:6px;">Logout</span>
                     `;
                     btn.addEventListener('click', () => {
-                        localStorage.removeItem(TOKEN_KEY);
-                        localStorage.removeItem('sc_user');
+                        sessionStorage.removeItem(TOKEN_KEY);
+                        sessionStorage.removeItem('sc_user');
                         window.location.href = 'login.html';
                     });
                     return btn;

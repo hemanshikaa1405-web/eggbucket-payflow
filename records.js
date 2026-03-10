@@ -1,4 +1,13 @@
+// Initialize Supabase client (will be set in DOMContentLoaded)
+let supabase = null;
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Use the global window.supabaseClient from supabaseClient.js
+    if (!window.supabaseClient) {
+        console.error('❌ Global Supabase client not initialized. Make sure supabaseClient.js is included.');
+    } else {
+        supabase = window.supabaseClient;
+    }
     // DOM Elements
     const recordsContainer = document.getElementById('records-container');
     const filterDropdown = document.getElementById('employee-filter');
@@ -253,16 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('📊 Records available for download:', records.length);
 
         if (records.length === 0) {
-            console.log('⚠️ No records in memory, checking localStorage...');
-            try {
-                const stored = localStorage.getItem('records');
-                if (stored) {
-                    records = JSON.parse(stored);
-                    console.log('📥 Loaded from localStorage:', records.length);
-                }
-            } catch (error) {
-                console.error('❌ Error loading from localStorage:', error);
-            }
+            console.log('⚠️ No records in memory.');
         }
 
         if (records.length === 0) {
@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Init ─────────────────────────────────────────────────────────────────
 
     async function init() {
-        await loadData();
+        await loadRecords();
         populateEmployeeDropdown();
 
         // Filter dropdown
@@ -497,69 +497,100 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function loadData() {
+    async function loadRecords() {
         try {
-            let storedEmployees = localStorage.getItem('employees');
-            if (!storedEmployees) {
-                const defaultEmployees = [
-                    { id: '1', name: 'John Doe', department: 'Sales-cum-Delivery' },
-                    { id: '2', name: 'Jane Smith', department: 'Customer AQ Fleet' },
-                    { id: '3', name: 'Bob Johnson', department: 'Interns' },
-                    { id: '4', name: 'Alice Brown', department: 'Executive Supervisor\'s' }
-                ];
-                localStorage.setItem('employees', JSON.stringify(defaultEmployees));
-                storedEmployees = JSON.stringify(defaultEmployees);
-            }
-            employees = JSON.parse(storedEmployees);
+            console.log('📥 Loading records...');
 
-            let storedRecords = localStorage.getItem('records');
-            let parsedRecords = [];
+            // Load employees - try Supabase first
+            try {
+                if (supabase) {
+                    const { data, error } = await supabase
+                        .from('Employee')
+                        .select('*')
+                        .order('name', { ascending: true });
 
-            if (storedRecords) {
-                try {
-                    parsedRecords = JSON.parse(storedRecords);
-                } catch (e) {
-                    parsedRecords = [];
+                    if (error) throw error;
+                    employees = data || [];
                 }
+            } catch (err) {
+                console.error("Error fetching employees from Supabase, falling back", err);
             }
 
-            if (storedRecords === null) {
-                const sampleRecords = [
-                    {
-                        employeeId: '1',
-                        month: '2024-03',
-                        trays: 100,
-                        baseSalary: 15000,
-                        incentive: 5000,
-                        totalSalary: 20000,
-                        id: 'sample1',
-                        createdAt: new Date().toISOString(),
-                        type: 'tray_sales'
-                    },
-                    {
-                        employeeId: '2',
-                        month: '2024-03',
-                        monthlySalary: 18000,
-                        bonus: 2000,
-                        baseSalary: 18000,
-                        incentive: 0,
-                        totalSalary: 20000,
-                        id: 'sample2',
-                        createdAt: new Date().toISOString(),
-                        type: 'aq_fleet'
+            if (employees.length === 0) {
+                console.warn("No employees loaded from Supabase.");
+            }
+
+            // Load records with fallback pattern
+            salaryHistory = [];
+            if (supabase) {
+                try {
+                    console.log('🔄 Attempting to load from Supabase...');
+                    const { data, error } = await supabase
+                        .from('SalaryRecord')
+                        .select('*, Employee(*)')
+                        .order('createdAt', { ascending: false });
+
+                    if (error) {
+                        console.error('❌ Supabase load error:', error);
+                        throw error;
                     }
-                ];
-                salaryHistory = sampleRecords;
-                localStorage.setItem('records', JSON.stringify(sampleRecords));
+                    console.log('✅ Loaded', data.length, 'records from Supabase');
+                    salaryHistory = data || [];
+                    loaded = true;
+                } catch (dbError) {
+                    console.error('❌ Supabase load failed - Full error:', dbError);
+                    console.warn('⚠️ Error message:', dbError.message);
+                }
             } else {
-                salaryHistory = parsedRecords;
+                console.warn('ℹ️ Supabase not available, cannot load records');
             }
 
             processAndRenderRecords();
             updateDownloadButtonState();
         } catch (error) {
             console.error('Error loading data:', error);
-            alert('Failed to load records from local storage.');
+            salaryHistory = [];
+            processAndRenderRecords();
+        }
+    }
+
+    async function saveRecord(recordData) {
+        try {
+            console.log('💾 Saving record...', JSON.stringify(recordData, null, 2));
+
+            let saved = false;
+
+            if (supabase) {
+                try {
+                    console.log('🔄 Attempting Supabase save...');
+                    console.log('📊 Record structure:', Object.keys(recordData));
+                    const { data, error } = await supabase
+                        .from('SalaryRecord')
+                        .insert([recordData]);
+
+                    if (error) {
+                        console.error('❌ Supabase insert error details:', error);
+                        throw error;
+                    }
+                    console.log('✅ Saved to Supabase with ID:', data);
+                    saved = true;
+                } catch (dbError) {
+                    console.error('❌ Supabase save failed - Full error:', dbError);
+                    console.warn('⚠️ Error message:', dbError.message);
+                }
+            }
+
+            if (saved) {
+                console.log('✅ Record saved successfully');
+                alert('Record saved successfully');
+                await loadRecords();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Unexpected error:', error);
+            alert('Failed to save record: ' + error.message);
+            return false;
         }
     }
 
@@ -647,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         base = result.baseSalary;
                         incentive = result.incentive;
                         total = result.totalSalary + bonus;
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             }
         }
@@ -769,20 +800,12 @@ document.addEventListener('DOMContentLoaded', () => {
             recordData.id = editingRecordId || Date.now().toString();
             recordData.createdAt = editingRecordId ? salaryHistory.find(r => r.id === editingRecordId)?.createdAt : new Date().toISOString();
 
-            if (editingRecordId) {
-                const index = salaryHistory.findIndex(r => r.id === editingRecordId);
-                if (index !== -1) {
-                    salaryHistory[index] = recordData;
-                }
-            } else {
-                salaryHistory.push(recordData);
+            // Save to Supabase instead of localStorage
+            const saved = await saveRecord(recordData);
+            if (saved) {
+                updateDownloadButtonState();
+                closeModal();
             }
-
-            localStorage.setItem('records', JSON.stringify(salaryHistory));
-
-            await loadData();
-            updateDownloadButtonState();
-            closeModal();
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to save record.');
@@ -792,10 +815,28 @@ document.addEventListener('DOMContentLoaded', () => {
     async function deleteRecord(id) {
         if (!confirm('Delete this salary record? This cannot be undone.')) return;
         try {
-            salaryHistory = salaryHistory.filter(r => r.id !== id);
-            localStorage.setItem('records', JSON.stringify(salaryHistory));
-            await loadData();
-            updateDownloadButtonState();
+            console.log('🗑️ Deleting record:', id);
+            let deleted = false;
+
+            if (supabase) {
+                try {
+                    const { error } = await supabase
+                        .from('SalaryRecord')
+                        .delete()
+                        .eq('id', id);
+                    if (error) throw error;
+                    console.log('✅ Deleted from Supabase');
+                    deleted = true;
+                } catch (dbError) {
+                    console.warn('⚠️ Supabase delete failed:', dbError);
+                }
+            }
+
+            if (deleted) {
+                alert('Record deleted successfully');
+                await loadRecords();
+                updateDownloadButtonState();
+            }
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to delete record.');
@@ -919,12 +960,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="record-stats">
                                 <div class="record-stat-pill">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                    ${
-                                        rec.type === 'aq_fleet' ? `${rec.aqCount.toLocaleString('en-IN')} AQ @ ${formatter.format(rec.aqCost)}` :
-                                        rec.type === 'intern' ? `${formatter.format(rec.monthlySalary)} salary` :
-                                        rec.type === 'supervisor' ? `${formatter.format(rec.monthlySalary)} salary` :
-                                        `${rec.trays.toLocaleString('en-IN')} trays`
-                                    }
+                                    ${rec.type === 'aq_fleet' ? `${rec.aqCount.toLocaleString('en-IN')} AQ @ ${formatter.format(rec.aqCost)}` :
+                        rec.type === 'intern' ? `${formatter.format(rec.monthlySalary)} salary` :
+                            rec.type === 'supervisor' ? `${formatter.format(rec.monthlySalary)} salary` :
+                                `${rec.trays.toLocaleString('en-IN')} trays`
+                    }
                                 </div>
                                 <div class="record-stat-pill">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M7 15h0M2 9.5h20"></path></svg>

@@ -53,22 +53,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // API Calls
     async function fetchEmployees() {
         try {
-            let storedEmployees = localStorage.getItem('employees');
-            if (!storedEmployees) {
-                const defaultEmployees = [
-                    { id: '1', name: 'John Doe', department: 'Sales-cum-Delivery' },
-                    { id: '2', name: 'Jane Smith', department: 'Customer AQ Fleet' },
-                    { id: '3', name: 'Bob Johnson', department: 'Interns' },
-                    { id: '4', name: 'Alice Brown', department: 'Executive Supervisor\'s' }
-                ];
-                localStorage.setItem('employees', JSON.stringify(defaultEmployees));
-                storedEmployees = JSON.stringify(defaultEmployees);
+            console.log('🔄 Loading employees from Supabase...');
+            const { data, error } = await window.supabaseClient
+                .from('Employee')
+                .select('*')
+                .order('name', { ascending: true });
+
+            if (error) {
+                console.error('❌ Supabase load error:', error);
+                throw error;
             }
-            employees = JSON.parse(storedEmployees);
+
+            employees = data || [];
+            console.log('✅ Loaded', employees.length, 'employees from Supabase');
             renderEmployees();
         } catch (error) {
             console.error('Error:', error);
-            alert('Failed to load employees from local storage.');
+            alert('Failed to load employees from Supabase.');
         }
     }
 
@@ -91,19 +92,23 @@ document.addEventListener('DOMContentLoaded', () => {
             let employeeData = { name, department, phone };
 
             if (editingId) {
-                employeeData.id = editingId;
-                // Update existing
-                const index = employees.findIndex(e => e.id === editingId);
-                if (index !== -1) {
-                    employees[index] = employeeData;
-                }
-            } else {
-                employeeData.id = Date.now().toString();
-                // Add new
-                employees.push(employeeData);
-            }
+                console.log('🔄 Updating employee in Supabase...');
+                const { error } = await window.supabaseClient
+                    .from('Employee')
+                    .update({ name, department, phone })
+                    .eq('id', editingId);
 
-            localStorage.setItem('employees', JSON.stringify(employees));
+                if (error) throw error;
+                console.log('✅ Employee updated');
+            } else {
+                console.log('🔄 Inserting new employee to Supabase...');
+                const { error } = await window.supabaseClient
+                    .from('Employee')
+                    .insert([{ name, department, phone }]);
+
+                if (error) throw error;
+                console.log('✅ Employee added');
+            }
 
             await fetchEmployees();
             closeModal();
@@ -147,8 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = deleteBtn.dataset.id;
             if (confirm('Are you sure you want to delete this employee?')) {
                 try {
-                    employees = employees.filter(e => e.id !== id);
-                    localStorage.setItem('employees', JSON.stringify(employees));
+                    console.log('🔄 Deleting employee from Supabase...');
+                    const { error } = await window.supabaseClient
+                        .from('Employee')
+                        .delete()
+                        .eq('id', id);
+
+                    if (error) throw error;
+                    console.log('✅ Employee deleted');
                     await fetchEmployees();
                 } catch (error) {
                     console.error('Error:', error);

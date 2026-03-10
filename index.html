@@ -15,26 +15,40 @@
         /* Polished appearance for Dashboard + Logout on index */
         #sc-auth-actions {
             display: inline-flex !important;
-            gap: 6px !important; /* small pleasant gap */
+            gap: 6px !important;
+            /* small pleasant gap */
             align-items: center !important;
         }
+
         /* Make the two controls slightly smaller and tighter so they look balanced */
-        #sc-auth-actions > a,
-        #sc-auth-actions > button {
+        #sc-auth-actions>a,
+        #sc-auth-actions>button {
             font-size: 14px !important;
             padding: 6px 10px !important;
             border-radius: 10px !important;
             box-shadow: none !important;
         }
+
         /* Keep icon spacing subtle */
-        #sc-auth-actions svg { vertical-align: middle; }
-        #sc-auth-actions button span { margin-left: 6px; }
+        #sc-auth-actions svg {
+            vertical-align: middle;
+        }
+
+        #sc-auth-actions button span {
+            margin-left: 6px;
+        }
+
         /* Remove any interfering margins */
-        #sc-auth-actions > * { margin: 0 !important; }
+        #sc-auth-actions>* {
+            margin: 0 !important;
+        }
     </style>
 </head>
 
 <body>
+    <!-- Initialize Supabase globally -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabaseClient.js"></script>
     <script src="auth.js"></script>
 
     <!-- Header Navigation -->
